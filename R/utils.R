@@ -151,11 +151,14 @@ generatePackageMetadata <- function(packages_dir,
     pkg_name <- basename(pkg_dir)
     message("\n处理包: ", pkg_name)
     
-    # 获取包的所有版本文件
-    tar_files <- list.files(pkg_dir, pattern = "\\.tar\\.gz$", full.names = TRUE)
+    # 获取包的所有版本文件（支持 .tar.gz 和 .tgz 格式）
+    tar_files <- c(
+      list.files(pkg_dir, pattern = "\\.tar\\.gz$", full.names = TRUE),
+      list.files(pkg_dir, pattern = "\\.tgz$", full.names = TRUE)
+    )
     
     if (length(tar_files) == 0) {
-      warning("包 '", pkg_name, "' 目录下没有找到.tar.gz文件")
+      warning("包 '", pkg_name, "' 目录下没有找到.tar.gz或.tgz文件")
       next
     }
     
@@ -164,14 +167,26 @@ generatePackageMetadata <- function(packages_dir,
     for (tar_file in tar_files) {
       # 从文件名提取版本号
       filename <- basename(tar_file)
-      # 假设格式为 packagename_version.tar.gz
-      version_match <- regmatches(filename, regexpr("_([0-9\\.\\-]+)\\.tar\\.gz$", filename))
-      if (length(version_match) == 0) {
+      version <- NULL
+      
+      # 支持 .tar.gz 格式
+      if (grepl("\\.tar\\.gz$", filename)) {
+        version_match <- regmatches(filename, regexpr("_([0-9\\.\\-]+)\\.tar\\.gz$", filename))
+        if (length(version_match) > 0) {
+          version <- sub("^_", "", sub("\\.tar\\.gz$", "", version_match))
+        }
+      } else if (grepl("\\.tgz$", filename)) {
+        # 支持 .tgz 格式（Mac 打包常用）
+        version_match <- regmatches(filename, regexpr("_([0-9\\.\\-]+)\\.tgz$", filename))
+        if (length(version_match) > 0) {
+          version <- sub("^_", "", sub("\\.tgz$", "", version_match))
+        }
+      }
+      
+      if (is.null(version) || length(version) == 0) {
         warning("无法从文件名解析版本: ", filename)
         next
       }
-      
-      version <- sub("^_", "", sub("\\.tar\\.gz$", "", version_match))
       
       # 生成校验和
       checksums <- generateChecksums(tar_file)
@@ -491,6 +506,12 @@ updatePackageMetadata <- function(package_name,
     version_match <- regmatches(filename, regexpr("_([0-9\\.\\-]+)\\.tar\\.gz$", filename))
     if (length(version_match) > 0) {
       version <- sub("^_", "", sub("\\.tar\\.gz$", "", version_match))
+    }
+  } else if (grepl("\\.tgz$", filename)) {
+    # 支持 .tgz 格式（Mac 打包常用）
+    version_match <- regmatches(filename, regexpr("_([0-9\\.\\-]+)\\.tgz$", filename))
+    if (length(version_match) > 0) {
+      version <- sub("^_", "", sub("\\.tgz$", "", version_match))
     }
   } else if (grepl("\\.zip$", filename)) {
     version_match <- regmatches(filename, regexpr("_([0-9\\.\\-]+)\\.zip$", filename))
